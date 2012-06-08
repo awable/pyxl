@@ -97,7 +97,7 @@ Pyxl automatically escapes all data and attribute values, therefore all your mar
     unsafe_attr = '">'
     print (<div class="{unsafe_attr}">
                {unsafe_value}
-               {rawhtml(safe_value)}
+               {html.rawhtml(safe_value)}
            </div>)
 
 The above script will print out:
