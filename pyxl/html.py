@@ -16,48 +16,47 @@ from pyxl.utils import escape, unescape, rawhtml
 from pyxl.base import x_base
 
 class x_html_element(x_base):
-    def to_string(self):
-        out = [u'<', self.__tag__]
+    def _to_list(self, l):
+        l.extend((u'<', self.__tag__))
         for name, value in self.__attributes__.iteritems():
-            out.extend((u' ', name, u'="', escape(value), u'"'))
-        out.append(u'>')
+            l.extend((u' ', name, u'="', escape(value), u'"'))
+        l.append(u'>')
 
         for child in self.__children__:
-            out.append(x_base.render_child(child))
+            x_base._render_child_to_list(child, l)
 
-        out.extend((u'</', self.__tag__, u'>'))
-        return u''.join(out)
+        l.extend((u'</', self.__tag__, u'>'))
 
 class x_html_element_nochild(x_base):
     def append(self, child):
         raise Exception('<%s> does not allow children.', self.__tag__)
 
-    def to_string(self):
-        out = [u'<', self.__tag__]
+    def _to_list(self, l):
+        l.extend((u'<', self.__tag__))
         for name, value in self.__attributes__.iteritems():
-            out.extend((u' ', name, u'="', escape(value), u'"'))
-        out.append(u' />')
-        return u''.join(out)
+            l.extend((u' ', name, u'="', escape(value), u'"'))
+        l.append(u' />')
 
 class x_html_comment(x_base):
     __attrs__ = {
         'comment': unicode,
         }
 
-    def to_string(self):
-        return '<!--%s-->' % self.attr('comment')
+    def _to_list(self, l):
+        l.extend((u'<!--', self.attr('comment'), u'-->'))
 
 class x_html_decl(x_base):
     __attrs__ = {
         'decl': unicode,
         }
 
-    def to_string(self):
-        return '<!%s>' % self.attr('decl')
+    def _to_list(self, l):
+        l.extend((u'<!', self.attr('decl'), u'>'))
 
 class x_frag(x_base):
-    def to_string(self):
-        return u''.join(self.render_child(c) for c in self.__children__)
+    def _to_list(self, l):
+        for child in self.__children__:
+            self._render_child_to_list(child, l)
 
 class x_a(x_html_element):
     __attrs__ = {
