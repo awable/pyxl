@@ -1,5 +1,7 @@
 **THIS PROJECT IS NO LONGER MAINTAINED OR UP TO DATE. IT IS NOW MAINTAINED AND UPDATED INTERNALLY AT DROPBOX**
 
+https://github.com/dropbox/pyxl
+
 Pyxl is an open source package that extends Python to support inline HTML. It converts HTML fragments into valid Python expressions, and is meant as a replacement for traditional python templating systems like [Mako](http://www.makotemplates.org/) or [Cheetah](http://www.cheetahtemplate.org/). It automatically escapes data, enforces correct markup and makes it easier to write reusable and well structured UI code. Pyxl was inspired by the [XHP](https://github.com/facebook/xhp/wiki) project at Facebook.
 
 ## Motivation
