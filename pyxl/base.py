@@ -140,7 +140,12 @@ class x_base(object):
         return (name in self.__attrs__ or name.startswith('data-') or name.startswith('aria-'))
 
     def to_string(self):
-        raise NotImplementedError()
+        l = []
+        self._to_list(l)
+        return u''.join(l)
+
+    def _to_list(self, l):
+        raise NotImplemented
 
     def __str__(self):
         return self.to_string().encode('utf8')
@@ -149,12 +154,11 @@ class x_base(object):
         return self.to_string()
 
     @staticmethod
-    def render_child(child):
+    def _render_child_to_list(child, l):
         child_type = type(child)
-        if issubclass(child_type, x_base): return child.to_string()
-        if child_type is rawhtml: return child.render()
-        if child_type is type(None): return u''
-        return escape(child)
+        if issubclass(child_type, x_base): child._to_list(l)
+        elif child_type is rawhtml: l.append(child.render())
+        elif child_type is not type(None): l.append(escape(child))
 
     @staticmethod
     def _fix_attribute_name(name):
