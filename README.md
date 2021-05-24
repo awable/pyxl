@@ -1,8 +1,7 @@
-**THIS PROJECT IS NO LONGER MAINTAINED OR UP TO DATE. IT IS NOW MAINTAINED AND UPDATED INTERNALLY AT DROPBOX**
-
+Pyxl is an open source package that extends Python to support inline HTML. It converts HTML fragments into valid Python expressions, and is meant as a replacement for traditional python templating systems like [Mako](http://www.makotemplates.org/) or [Cheetah](http://www.cheetahtemplate.org/). It automatically escapes data, enforces correct markup and makes it easier to write reusable and well structured UI code. **THIS PROJECT IS NO LONGER MAINTAINED OR UP TO DATE. IT IS NOW MAINTAINED AND UPDATED INTERNALLY AT DROPBOX**
 https://github.com/dropbox/pyxl
 
-Pyxl is an open source package that extends Python to support inline HTML. It converts HTML fragments into valid Python expressions, and is meant as a replacement for traditional python templating systems like [Mako](http://www.makotemplates.org/) or [Cheetah](http://www.cheetahtemplate.org/). It automatically escapes data, enforces correct markup and makes it easier to write reusable and well structured UI code. Pyxl was inspired by the [XHP](https://github.com/facebook/xhp/wiki) project at Facebook.
+Pyxl was inspired by the [XHP](https://github.com/facebook/xhp/wiki) project at Facebook.
 
 ## Motivation
 
@@ -45,7 +44,7 @@ Pyxl converts HTML tags into python objects before the file is run through the i
 
     print x_head().append_children(x_body().append_children("Hello World!"))
 
-Pyxl's usefulness comes from being able to write HTML rather than unwieldy object instantiations and function calls. Note that Pyxl automatically adds objects for all HTML tags to Python builtins, so there is no need to import `x_head` or `x_body` in the example above. 
+Pyxl's usefulness comes from being able to write HTML rather than unwieldy object instantiations and function calls. Note that Pyxl automatically adds objects for all HTML tags to Python builtins, so there is no need to import `x_head` or `x_body` in the example above.
 
 The conversion to Python is relatively straightforward: Opening tags are converted into object instantiations for the respective tag, nested tags are passed in as arguments to the `append_children` method, and closing tags close the bracket to the `append_children` call. As a result, a big advantage of this is that stack traces on errors map directly to what you've written. To learn more about how Pyxl does this, see the **Implementation Details** section below.
 
