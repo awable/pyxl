@@ -1,20 +1,18 @@
 #!/usr/bin/env python
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
 
-import sys
+# We want a way to generate non-colliding 'pyxl<num>' ids for elements, so we're
+# using a non-cryptographically secure random number generator. We want it to be
+# insecure because these aren't being used for anything cryptographic and it's
+# much faster (2x). We're also not using NumPy (which is even faster) because
+# it's a difficult dependency to fulfill purely to generate random numbers.
 import random
-from pyxl.utils import escape, rawhtml
+import sys
+import json
+
+from core.pyxl.utils import escape
+
+class PyxlException(Exception):
+    pass
 
 class x_base_metaclass(type):
     def __init__(self, name, parents, attrs):
@@ -28,24 +26,53 @@ class x_base_metaclass(type):
             assert '_' not in attr_name, (
                 "%s: '_' not allowed in attr names, use '-' instead" % attr_name)
 
-        self_attrs.update(parent_attrs)
-        setattr(self, '__attrs__', self_attrs)
+        combined_attrs = dict(parent_attrs)
+        combined_attrs.update(self_attrs)
+        setattr(self, '__attrs__', combined_attrs)
         setattr(self, '__tag__', name[2:])
 
 class x_base(object):
 
     __metaclass__ = x_base_metaclass
     __attrs__ = {
-        'id': unicode,
+        # HTML attributes
+        'accesskey': unicode,
         'class': unicode,
+        'dir': unicode,
+        'id': unicode,
+        'lang': unicode,
+        'maxlength': unicode,
+        'role': unicode,
         'style': unicode,
+        'tabindex': int,
+        'title': unicode,
+        'xml:lang': unicode,
+
+        # JS attributes
+        'onabort': unicode,
+        'onblur': unicode,
+        'onchange': unicode,
         'onclick': unicode,
         'ondblclick': unicode,
-        'onmouseup': unicode,
+        'onerror': unicode,
+        'onfocus': unicode,
+        'oninput': unicode,
+        'onkeydown': unicode,
+        'onkeypress': unicode,
+        'onkeyup': unicode,
+        'onload': unicode,
         'onmousedown': unicode,
-        'onmouseover': unicode,
+        'onmouseenter': unicode,
+        'onmouseleave': unicode,
+        'onmousemove': unicode,
         'onmouseout': unicode,
-        'title': unicode,
+        'onmouseover': unicode,
+        'onmouseup': unicode,
+        'onreset': unicode,
+        'onresize': unicode,
+        'onselect': unicode,
+        'onsubmit': unicode,
+        'onunload': unicode,
         }
 
     def __init__(self, **kwargs):
@@ -66,30 +93,32 @@ class x_base(object):
             self.set_attr('id', eid)
         return eid
 
-    def children(self, selector=None):
+    def children(self, selector=None, exclude=False):
         if not selector:
             return self.__children__
 
         # filter by class
         if selector[0] == '.':
-            class_name = selector[1:]
-            return [c for c in self.__children__
-                    if class_name in c.get_class()]
+            select = lambda x: selector[1:] in x.get_class()
 
         # filter by id
-        if selector[0] == '#':
-            id_name = selector[1:]
-            return [c for c in self.__children__
-                    if c.get_id() == id_name]
+        elif selector[0] == '#':
+            select = lambda x: selector[1:] == x.get_id()
 
         # filter by tag name
-        tag_name = 'x_%s' % selector
-        return [c for c in self.__children__
-                if c.__class__.__name__ == tag_name]
+        else:
+            select = lambda x: x.__class__.__name__ == ('x_%s' % selector)
+
+        if exclude:
+            func = lambda x: not select(x)
+        else:
+            func = select
+
+        return filter(func, self.__children__)
 
     def append(self, child):
-        if type(child) in (list, tuple):
-            self.__children__.extend(c for c in child if c is not None and c is not False)
+        if type(child) in (list, tuple) or hasattr(child, '__iter__'):
+            for subchild in child: self.append(subchild)
         elif child is not None and child is not False:
             self.__children__.append(child)
 
@@ -103,15 +132,68 @@ class x_base(object):
     def attr(self, name, default=None):
         # this check is fairly expensive (~8% of cost)
         if not self.allows_attribute(name):
-            raise Exception('<%s> has no attr named "%s"' % (self.__tag__, name))
-        return self.__attributes__.get(name, default)
+            raise PyxlException('<%s> has no attr named "%s"' % (self.__tag__, name))
+
+        value = self.__attributes__.get(name)
+
+        if value is not None:
+            return value
+
+        attr_type = self.__attrs__.get(name, unicode)
+        if type(attr_type) == list:
+            if not attr_type:
+                raise PyxlException('Invalid attribute definition')
+
+            if None in attr_type[1:]:
+                raise PyxlException('None must be the first, default value')
+
+            return attr_type[0]
+
+        return default
+
+    def transfer_attributes(self, element):
+        for name, value in self.__attributes__.iteritems():
+            if element.allows_attribute(name) and element.attr(name) is None:
+                element.set_attr(name, value)
 
     def set_attr(self, name, value):
         # this check is fairly expensive (~8% of cost)
         if not self.allows_attribute(name):
-            raise Exception('<%s> has no attr named "%s"' % (self.__tag__, name))
+            raise PyxlException('<%s> has no attr named "%s"' % (self.__tag__, name))
+
         if value is not None:
+            attr_type = self.__attrs__.get(name, unicode)
+
+            if type(attr_type) == list:
+                # support for enum values in pyxl attributes
+                values_enum = attr_type
+                assert values_enum, 'Invalid attribute definition'
+
+                if value not in values_enum:
+                    msg = '%s: %s: incorrect value "%s" for "%s". Expecting enum value %s' % (
+                        self.__tag__, self.__class__.__name__, value, name, values_enum)
+                    raise PyxlException(msg)
+
+            else:
+                try:
+                    # complex data attributes get json serialized
+                    if name.startswith('data-'):
+                        if isinstance(value, (list, dict, tuple)):
+                            value = json.dumps(value)
+                        elif isinstance(value, bool):
+                            value = "true" if value else "false"
+
+                    # Validate type of attr and cast to correct type if possible
+                    value = value if isinstance(value, attr_type) else attr_type(value)
+                except Exception:
+                    exc_type, exc_obj, exc_tb = sys.exc_info()
+                    msg = '%s: %s: incorrect type for "%s". expected %s, got %s' % (
+                        self.__tag__, self.__class__.__name__, name, attr_type, type(value))
+                    exception = PyxlException(msg)
+                    raise exception, None, exc_tb
+
             self.__attributes__[name] = value
+
         elif name in self.__attributes__:
             del self.__attributes__[name]
 
@@ -120,10 +202,14 @@ class x_base(object):
 
     def add_class(self, xclass):
         if not xclass: return
-        current_class = self.attr('class')
+        current_class = self.attr('class', '')
         if current_class: current_class += ' ' + xclass
         else: current_class = xclass
         self.set_attr('class', current_class)
+
+    def has_class(self, xclass):
+        current_class = self.attr('class', '')
+        return xclass in current_class.split()
 
     def append_children(self, children):
         for child in children:
@@ -132,14 +218,22 @@ class x_base(object):
     def attributes(self):
         return self.__attributes__
 
-    def set_attributes(self, **kwargs):
-        for name, value in kwargs.iteritems():
+    def set_attributes(self, attrs_dict):
+        for name, value in attrs_dict.iteritems():
             self.set_attr(name, value)
 
     def allows_attribute(self, name):
         return (name in self.__attrs__ or name.startswith('data-') or name.startswith('aria-'))
 
+    def _get_base_element(self):
+        return self
+
     def to_string(self):
+        l = []
+        self._to_list(l)
+        return u''.join(l)
+
+    def _to_list(self, l):
         raise NotImplementedError()
 
     def __str__(self):
@@ -149,12 +243,9 @@ class x_base(object):
         return self.to_string()
 
     @staticmethod
-    def render_child(child):
-        child_type = type(child)
-        if issubclass(child_type, x_base): return child.to_string()
-        if child_type is rawhtml: return child.render()
-        if child_type is type(None): return u''
-        return escape(child)
+    def _render_child_to_list(child, l):
+        if isinstance(child, x_base): child._to_list(l)
+        elif child is not None: l.append(escape(child))
 
     @staticmethod
     def _fix_attribute_name(name):
